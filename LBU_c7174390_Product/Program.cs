@@ -13,21 +13,21 @@ class analyser
     private static string user;
     private static string out_basedir = @"C:\kd_d_out\";
     private static Dictionary<string, FeatureQueue> FeatureQueues = new Dictionary<string, FeatureQueue>();
-    private static List<Session> Sessions = new List<Session>();
+    private List<Session> Sessions = new List<Session>();
     private static Dictionary<int, Dictionary<String, SampleCollection>> SampleCollections = new Dictionary<int, Dictionary<String, SampleCollection>>();
     private static dotnet_keylogger.KeylogQ keylogQ;
 
-    public analyser(dotnet_keylogger.KeylogQ kQ)
+    public analyser(dotnet_keylogger.KeylogQ kQ, string application)
     {
         keylogQ = kQ;
-        Sessions.Add(new Session(0));
+        this.Sessions.Add(new Session(0));
         while (keylogs.Count < 20)
         {
             // build up a queue so we can look forward
-            if (!readKeylog())
+            if (!readKeylog(ProcessRegex:application))
             { throw new System.Exception("No matching keylogs to analyse"); }
         }
-        while (readKeylog())
+        while (readKeylog(ProcessRegex:application))
         {
             //continue;
             processKeylogs();
@@ -36,14 +36,18 @@ class analyser
         {
             fq.Close();
         }
-        OutputSessions();
-        OutputApplications();
+        //OutputSessions();
+        //OutputApplications();
         //int[] AggRange = { 4, 8, 16, 32};
-        int[] AggRange = { 4,};
-        OutputSamples(SampleAggs:AggRange);
+        //int[] AggRange = { 4,};
+        //OutputSamples(SampleAggs:AggRange);
         //outputFeatureQueueOutlierTestStats(FeatureQueues);
     }
-    private static Boolean readKeylog(String ApplicationRegex = ".*", String ProcessRegex = ".*", String SessionRegex = ".*")
+    public Dictionary<string, Application> getApps()
+    {
+        return this.Sessions[0].Applications;
+    }
+    private Boolean readKeylog(String ApplicationRegex = ".*", String ProcessRegex = ".*", String SessionRegex = ".*")
     {
         while (! keylogQ.isEmpty())
         {
@@ -51,11 +55,11 @@ class analyser
             try
             {
                 latest_keylog = keylogQ.Retrieve();
-                if (!Sessions.Last().AddKeylog(latest_keylog, user))
+                if (!this.Sessions.Last().AddKeylog(latest_keylog, user))
                 {
                     // Session wants to be closed, time for a new one
-                    Sessions.Add(new Session(Sessions.Count));
-                    Sessions.Last().AddKeylog(latest_keylog, user);
+                    this.Sessions.Add(new Session(Sessions.Count));
+                    this.Sessions.Last().AddKeylog(latest_keylog, user);
                 }
                 _match = true;
                 if (SessionRegex != ".*")
@@ -131,29 +135,33 @@ class analyser
         }
         SW.Flush();
     }
-    private static void OutputSessions()
+    private void OutputSessions()
     {
-        Sessions.Last().Close();
+        this.Sessions.Last().Close();
         System.IO.StreamWriter SW = new System.IO.StreamWriter(out_basedir + "Sessions.CSV");
         SW.WriteLine(Session.Header);
-        foreach (Session S in Sessions)
+        foreach (Session S in this.Sessions)
         {
             SW.WriteLine(S.Print());
         }
         SW.Flush();
     }
-    private static void OutputApplications()
+    private void OutputApplications()
     {
         System.IO.StreamWriter SW = new System.IO.StreamWriter(out_basedir + "Applications.CSV");
         SW.WriteLine(Session.ApplicationsHeader);
-        foreach (Session S in Sessions)
+        foreach (Session S in this.Sessions)
         {
             SW.WriteLine(S.PrintApplications());
         }
         SW.Flush();
     }
-    private static void OutputSamples(int MinSample = 10, int SampleAgg = 0, int[] SampleAggs = null)
+    public void OutputSamples(string user, string application, int MinSample = 10, int SampleAgg = 0, int[] SampleAggs = null, string path = null)
     {
+        if (path == null)
+        {
+            path = Environment.GetFolderPath(Environment.SpecialFolder.Desktop) + "\\";
+        }
         if(SampleAgg == 0 && SampleAggs == null)
         {
             throw new System.Exception("SampleAgg or SampleAggs required");
@@ -164,7 +172,7 @@ class analyser
         }
         //Calculate minimum samples needed to satisfy MinSample number
         int MinimumSamplesRequired = MinSample * (SampleAgg == 0 ? SampleAggs.Min() : SampleAgg);
-        Sessions.Last().Close();
+        this.Sessions.Last().Close();
         foreach (int Session in SampleCollections.Keys)
         {
             /// Build the statstable header
@@ -184,8 +192,8 @@ class analyser
                 SC.Close();
                 if (!SampleCollection.IsTooSmall(SC,MinimumSamplesRequired )) //ignore small samplescollections
                 {
-                    System.IO.StreamWriter SW = new System.IO.StreamWriter(out_basedir +
-                                                    $"Session_{Session}_Samples_{SC.FeatureName}.csv");
+                    System.IO.StreamWriter SW = new System.IO.StreamWriter(path +
+                                                    $"{user}_{application}_Samples_{SC.FeatureName}.csv");
                     switch(SampleAgg)
                     {
                         case 0:
@@ -210,8 +218,8 @@ class analyser
             }
             if (SampleAggs != null)
             {
-                System.IO.StreamWriter ST = new System.IO.StreamWriter(out_basedir +
-                                                        $"Session_{Session}_StatsTable.csv");
+                System.IO.StreamWriter ST = new System.IO.StreamWriter(path +
+                                                        $"{user}_{application}_StatsTable.csv");
                 ST.Write(StatsTable);
                 ST.Flush();
                 ST.Close();

